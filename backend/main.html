@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>MPL Bingo Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+
+<body class="bg-gray-100 min-h-screen flex flex-col items-center py-8">
+    <h2 class="text-3xl font-bold text-blue-700 mb-6"> MPL Bingo Game</h2>
+
+    <!-- Username Input -->
+    <div id="usernameInput" class="space-x-2">
+        <input type="text" id="username" placeholder="Enter your name"
+            class="px-4 py-2 border border-gray-400 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400" />
+        <button onclick="joinGame()"
+            class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition">Join Game</button>
+    </div>
+
+    <!-- Board Selection -->
+    <div id="boardSelection" style="display:none;"
+        class="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 px-4"></div>
+
+    <!-- Selected Board -->
+    <div id="selectedBoard" class="mt-8 w-full flex flex-col items-center"></div>
+    
+    <script>
+        const socket = io('http://localhost:3000');
+        let currentDrawnNumber = null;
+        let score = 0;
+        let drawStartTime = null;
+        let gameEnded = false;
+
+        function joinGame() {
+            const username = document.getElementById('username').value;
+            if (!username) return alert("Please enter your name.");
+            socket.emit('joinGame', username);
+        }
+
+        function updateScore(newScore) {
+            if (gameEnded) return;
+            const scoreDiv = document.getElementById('score');
+            scoreDiv.innerText = `Score: ${newScore}`;
+        }
+
+        socket.on('boardOptions', (boards) => {
+            document.getElementById('usernameInput').style.display = 'none';
+            const container = document.getElementById('boardSelection');
+            container.style.display = 'grid';
+            container.innerHTML = '';
+
+            boards.forEach((item, i) => {
+                const boardCard = document.createElement('div');
+                boardCard.className =
+                    "bg-white shadow-lg rounded-lg p-4 border border-gray-200 hover:ring hover:ring-blue-400 cursor-pointer transition";
+                boardCard.onclick = () => socket.emit('selectBoard', i);
+
+                const title = document.createElement('h4');
+                title.className = "text-lg font-semibold text-center mb-2 text-blue-600";
+                title.innerText = `Board ${i + 1}`;
+                boardCard.appendChild(title);
+
+                item.board.forEach(row => {
+                    const rowDiv = document.createElement('div');
+                    rowDiv.className = "flex justify-center";
+                    row.forEach(cell => {
+                        const cellDiv = document.createElement('div');
+                        cellDiv.className = `w-10 h-10 flex items-center justify-center m-1 font-bold border rounded-md text-sm 
+                        ${cell === 'FREE' ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-800'}`;
+                        cellDiv.innerText = cell;
+                        rowDiv.appendChild(cellDiv);
+                    });
+                    boardCard.appendChild(rowDiv);
+                });
+
+                const sumDiv = document.createElement('div');
+                sumDiv.className = "text-center mt-2 text-sm text-gray-500";
+                sumDiv.innerText = `Sum: ${item.sum}`;
+                boardCard.appendChild(sumDiv);
+
+                container.appendChild(boardCard);
+            });
+        });
+
+        socket.on('boardSelected', (board) => {
+            document.getElementById('boardSelection').style.display = 'none';
+            const div = document.getElementById('selectedBoard');
+            div.innerHTML = '<h3 class="text-xl font-bold text-green-600 mb-4"> You selected this board:</h3>';
+
+            const countdown = document.createElement('div');
+            countdown.id = 'countdown';
+            countdown.className = 'text-center text-2xl font-semibold text-red-600 mb-2';
+            div.appendChild(countdown);
+
+            let count = 4;
+            const timer = setInterval(() => {
+                countdown.innerText = `Game starts in ${count--}...`;
+                if (count < 0) {
+                    clearInterval(timer);
+                    countdown.remove();
+                    renderBoard(board.board);
+                    socket.emit('readyToPlay');
+                }
+            }, 1000);
+        });
+
+        function renderBoard(boardData) {
+            const div = document.getElementById('selectedBoard');
+            div.innerHTML += `
+                <div id="timer" class="text-center text-lg text-red-500 font-semibold mb-2"></div>
+                <div id="score" class="text-xl font-bold text-purple-600 mb-2">Score: 0</div>
+                <h4 class="text-lg mt-4 mb-2 font-bold text-blue-700">Click the number if it matches the drawn number:</h4>
+            `;
+
+            const boardContainer = document.createElement('div');
+            boardContainer.id = "bingoBoard";
+
+            boardData.forEach(row => {
+                const rowDiv = document.createElement('div');
+                rowDiv.className = "flex justify-center";
+
+                row.forEach(cell => {
+                    const cellDiv = document.createElement('div');
+                    cellDiv.className = "cell w-12 h-12 flex items-center justify-center m-1 font-bold border rounded-md text-base";
+
+                    if (cell === 'FREE') {
+                        cellDiv.classList.add("bg-green-600", "text-white");
+                        cellDiv.innerText = 'FREE';
+                        cellDiv.setAttribute('data-free', true);
+                    } else {
+                        cellDiv.classList.add("bg-white", "text-gray-800", "cursor-pointer");
+                        cellDiv.innerText = cell;
+                        cellDiv.setAttribute('data-value', cell);
+                    }
+
+                    rowDiv.appendChild(cellDiv);
+                });
+
+                boardContainer.appendChild(rowDiv);
+            });
+
+            div.appendChild(boardContainer);
+
+            div.innerHTML += `<div id="drawnNumbers" class="mt-6 text-center">
+                <h4 class="font-semibold text-md text-blue-500 mb-2">Drawn Numbers:</h4>
+            </div>`;
+        }
+
+        socket.on('numberDrawn', (num) => {
+            if (gameEnded) return;
+
+            currentDrawnNumber = num;
+            drawStartTime = Date.now();
+
+            const drawArea = document.getElementById('drawnNumbers');
+            drawArea.innerHTML += `<span class="inline-block m-1 px-3 py-1 bg-blue-600 text-white rounded">${num}</span>`;
+
+            const cells = document.querySelectorAll('.cell');
+            cells.forEach(cell => {
+                if (!cell.dataset.free && !cell.classList.contains("matched")) {
+                    cell.style.pointerEvents = 'auto';
+                    cell.onclick = () => {
+                        if (gameEnded) return;
+
+                        const clickTime = Date.now();
+                        const timeTaken = (clickTime - drawStartTime) / 1000;
+                        const cellNumber = parseInt(cell.dataset.value);
+
+                        if (cellNumber === currentDrawnNumber) {
+                            let points = 0;
+                            if (timeTaken <= 2) {
+                                points = 100;
+                            } else if (timeTaken <= 4) {
+                                points = 70;
+                            } else {
+                                points = 20;
+                            }
+
+                            score += points;
+                            updateScore(score);
+
+                            cell.classList.remove("bg-white", "text-gray-800");
+                            cell.classList.add("bg-yellow-300", "text-black", "matched");
+                            cell.style.pointerEvents = 'none';
+                        } else {
+                            score -= 10;
+                            updateScore(score);
+                        }
+                    };
+                }
+            });
+        });
+
+    socket.on('startTimer', ({ duration }) => {
+            let time = duration;
+            const timerDiv = document.getElementById('timer');
+
+            const countdownInterval = setInterval(() => {
+                if (gameEnded) {
+                    clearInterval(countdownInterval);
+                    return;
+                }
+
+                const minutes = Math.floor(time / 60);
+                const seconds = time % 60;
+                const formattedTime = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+
+                timerDiv.innerText = `Time Left: ${formattedTime}`;
+                time--;
+
+                if (time < 0) {
+                    clearInterval(countdownInterval);
+                    timerDiv.innerText = ` Time's up!`;
+                }
+            }, 1000);
+        });
+
+        socket.on('gameOver', () => {
+            gameEnded = true;
+
+            const cells = document.querySelectorAll('.cell');
+            cells.forEach(cell => cell.style.pointerEvents = 'none');
+
+            const boardArea = document.getElementById('selectedBoard');
+            const msg = document.createElement('div');
+            msg.className = 'text-center text-2xl text-red-600 font-bold mt-6';
+            msg.innerText = ' Game Over!';
+            boardArea.appendChild(msg);
+        });
+    </script>
+
+</body>
+
+</html>
