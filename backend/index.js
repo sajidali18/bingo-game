@@ -24,40 +24,36 @@ let drawTimeout = null;
 const targetSums = [821, 889, 949, 1009];
 
 // Generate bingo boards with specific sums
-function generateBingoBoardWithTargetSum(targetSum) {
+function generateRandomBoard(targetSums) {
+    const numbers = Array.from({ length: 75 }, (_, i) => i + 1);
     const board = [];
-    const ranges = [
-        { min: 1, max: 15 },
-        { min: 16, max: 30 },
-        { min: 31, max: 45 },
-        { min: 46, max: 60 },
-        { min: 61, max: 75 },
-    ];
-
-    for (let col = 0; col < 5; col++) {
-        const nums = new Set();
-        while (nums.size < 5) {
-            const rand = Math.floor(Math.random() * (ranges[col].max - ranges[col].min + 1)) + ranges[col].min;
-            nums.add(rand);
-        }
-        board.push([...nums]);
-    }
-
-    const transposed = [];
     for (let row = 0; row < 5; row++) {
-        transposed[row] = [];
+        const rowArr = [];
         for (let col = 0; col < 5; col++) {
-            transposed[row][col] = board[col][row];
+            if (row === 2 && col === 2) {
+                rowArr.push('FREE');
+            } else {
+                const randIndex = Math.floor(Math.random() * numbers.length);
+                rowArr.push(numbers.splice(randIndex, 1)[0]);
+            }
         }
+        board.push(rowArr);
     }
-
-    transposed[2][2] = 'FREE';
-
-    const flat = transposed.flat().filter(v => v !== 'FREE');
-    const total = flat.reduce((a, b) => a + b, 0);
-
-    return { board: transposed, sum: total };
+    return board;
 }
+
+function generateMultipleBoards(count = 4) {
+    const boards = [];
+    for (let i = 0; i < count; i++) {
+        const board = generateRandomBoard();
+        const sum = board.flat().reduce((acc, val) => val !== 'FREE' ? acc + val : acc, 0);
+        boards.push({ board, sum });
+    }
+    return boards;
+}
+
+module.exports = { generateMultipleBoards };
+
 
 const bingoBoards = targetSums.map(sum => generateBingoBoardWithTargetSum(sum));
 
