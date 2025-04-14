@@ -21,10 +21,8 @@ let drawnNumbers = new Set();
 let gameStarted = false;
 let drawTimeout = null;
 
-const targetSums = [821, 889, 949, 1009];
-
-// Generate bingo boards with specific sums
-function generateRandomBoard(targetSums) {
+// Generate a single bingo board
+function generateRandomBoard() {
     const numbers = Array.from({ length: 75 }, (_, i) => i + 1);
     const board = [];
     for (let row = 0; row < 5; row++) {
@@ -42,6 +40,7 @@ function generateRandomBoard(targetSums) {
     return board;
 }
 
+// Generate multiple boards (default 4)
 function generateMultipleBoards(count = 4) {
     const boards = [];
     for (let i = 0; i < count; i++) {
@@ -51,11 +50,6 @@ function generateMultipleBoards(count = 4) {
     }
     return boards;
 }
-
-module.exports = { generateMultipleBoards };
-
-
-const bingoBoards = targetSums.map(sum => generateBingoBoardWithTargetSum(sum));
 
 // Draw next number with 5-second delay
 function drawNextNumber() {
@@ -69,13 +63,9 @@ function drawNextNumber() {
     drawnNumbers.add(num);
     io.emit('numberDrawn', num);
 
-    // Clear old timer and start a new one
+    // Reset timer
     if (drawTimeout) clearTimeout(drawTimeout);
-
-    drawTimeout = setTimeout(() => {
-        drawNextNumber();
-    }, 5000);
-
+    drawTimeout = setTimeout(drawNextNumber, 5000);
     return num;
 }
 
@@ -86,39 +76,43 @@ function startGame() {
     gameStarted = true;
     drawnNumbers = new Set();
 
-    io.emit('startTimer', { duration: 180 }); // 3 minutes
+    io.emit('startTimer', { duration: 180 }); // 3 min
     setTimeout(() => {
         if (drawTimeout) clearTimeout(drawTimeout);
         io.emit('gameOver');
         gameStarted = false;
-    }, 180000); // End after 3 minutes
+    }, 180000);
 
-    drawNextNumber(); // First number
+    drawNextNumber(); // Start drawing
 }
 
 // Socket setup
 io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
+    // Send fresh boards to each user
     socket.on('joinGame', (username) => {
         users[socket.id] = { username };
-        socket.emit('boardOptions', bingoBoards);
+        const boards = generateMultipleBoards(4); // fresh set of 4 boards
+        users[socket.id].boards = boards; // store per user
+        socket.emit('boardOptions', boards);
     });
 
     socket.on('selectBoard', (boardIndex) => {
-        const selected = bingoBoards[boardIndex];
-        selectedBoards[socket.id] = selected;
-        socket.emit('boardSelected', selected);
+        const boards = users[socket.id]?.boards;
+        if (boards && boards[boardIndex]) {
+            const selected = boards[boardIndex];
+            selectedBoards[socket.id] = selected;
+            socket.emit('boardSelected', selected);
+        }
     });
 
     socket.on('readyToPlay', () => {
-
         startGame();
     });
 
-    // ✅ If user matched number, emit new number and reset 5-sec timer
     socket.on('numberMatched', () => {
-        drawNextNumber();
+        drawNextNumber(); // Reset timer and send next number
     });
 
     socket.on('disconnect', () => {
