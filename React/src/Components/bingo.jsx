@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import io from 'socket.io-client';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 const socket = io('https://bingo-game-1.onrender.com');
 
@@ -23,10 +25,12 @@ const BingoGame = () => {
     };
 
     useEffect(() => {
+        // Receive board options
         socket.on('boardOptions', (boards) => {
             setBoardOptions(boards);
         });
 
+        // Selected board received
         socket.on('boardSelected', (board) => {
             setBoardOptions([]);
             setSelectedBoard(board);
@@ -47,6 +51,7 @@ const BingoGame = () => {
             }, 1000);
         });
 
+        // Number drawn
         socket.on('numberDrawn', (num) => {
             if (!gameStarted || gameEnded) return;
             setCurrentNumber(num);
@@ -54,6 +59,7 @@ const BingoGame = () => {
             setDrawnNumbers((prev) => [...prev, num]);
         });
 
+        // Timer setup
         socket.on('startTimer', ({ duration }) => {
             let time = duration;
             const interval = setInterval(() => {
@@ -63,12 +69,10 @@ const BingoGame = () => {
                 }
                 setTimer(time--);
                 if (time < 0) clearInterval(interval);
-                socket.on('gameOver', () => {
-                    setGameEnded(true);
-                });
             }, 1000);
         });
 
+        // Game over
         socket.on('gameOver', () => {
             setGameEnded(true);
         });
@@ -101,12 +105,38 @@ const BingoGame = () => {
 
     const isMatched = (index) => matchedCells.has(index);
 
+    const checkBingo = () => {
+        const matched = [...matchedCells];
+        const size = 5;
+
+        const isLineComplete = (indices) => indices.every(i => matched.includes(i));
+
+        const lines = [];
+
+        for (let i = 0; i < size; i++) {
+            lines.push(Array.from({ length: size }, (_, j) => i * size + j)); // rows
+            lines.push(Array.from({ length: size }, (_, j) => j * size + i)); // columns
+        }
+
+        lines.push([0, 6, 12, 18, 24]); // diagonal
+        lines.push([4, 8, 12, 16, 20]); // anti-diagonal
+
+        const completed = lines.filter(isLineComplete);
+
+        if (completed.length > 0) {
+            toast.success("🎉 You Win! Bingo completed!", { position: "top-center" });
+            socket.emit("bingoSuccess");
+        } else {
+            toast.error("❌ Bingo not complete. Keep going!", { position: "top-center" });
+        }
+    };
+
     return (
         <div className="bg-gray-100 min-h-screen flex flex-col items-center py-8">
             <h2 className="text-3xl font-bold text-blue-700 mb-6">MPL Bingo Game</h2>
 
             {!boardOptions.length && !selectedBoard && (
-                <div id="usernameInput" className="space-x-2">
+                <div className="space-x-2">
                     <input
                         type="text"
                         placeholder="Enter your name"
@@ -137,8 +167,9 @@ const BingoGame = () => {
                                     {row.map((cell, ci) => (
                                         <div
                                             key={ci}
-                                            className={`w-10 h-10 flex items-center justify-center m-1 font-bold border rounded-md text-sm ${cell === 'FREE' ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-800'
-                                                }`}
+                                            className={`w-10 h-10 flex items-center justify-center m-1 font-bold border rounded-md text-sm
+                                                ${cell === 'FREE' ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-800'}
+                                            `}
                                         >
                                             {cell}
                                         </div>
@@ -167,8 +198,6 @@ const BingoGame = () => {
 
                             <div className="text-xl font-bold text-purple-600 mb-2">Score: {score}</div>
 
-
-                            {/* Board Grid */}
                             <div className="mb-4" id="bingoBoard">
                                 {selectedBoard.board.map((row, rowIndex) => (
                                     <div key={rowIndex} className="flex justify-center">
@@ -197,7 +226,6 @@ const BingoGame = () => {
                                 ))}
                             </div>
 
-                            {/* Drawn Numbers */}
                             <div id="currentNumber" className="mt-6 text-center">
                                 <h4 className="font-semibold text-md text-blue-500 mb-2"> Number:</h4>
                                 {currentNumber !== null && (
@@ -207,7 +235,21 @@ const BingoGame = () => {
                                 )}
                             </div>
 
-                            {/* Game Over Message */}
+                            <div className="flex gap-4 mt-6">
+                                <button
+                                    onClick={checkBingo}
+                                    className="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition"
+                                >
+                                    BINGO!
+                                </button>
+                                <button
+                                    onClick={() => window.location.reload()}
+                                    className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition"
+                                >
+                                    New Game
+                                </button>
+                            </div>
+
                             {gameEnded && (
                                 <div className="text-center text-2xl text-red-600 font-bold mt-6">Game Over!</div>
                             )}
@@ -215,6 +257,8 @@ const BingoGame = () => {
                     )}
                 </div>
             )}
+
+            <ToastContainer />
         </div>
     );
 };
