@@ -32,6 +32,9 @@ const BingoGame = () => {
             setBoardOptions([]);
             setSelectedBoard(board);
 
+            const freeIndex = 12; // Center of 5x5 grid
+            setMatchedCells(new Set([freeIndex])); // Pre-match FREE cell
+
             let count = 4;
             setCountdown(count);
 
@@ -98,28 +101,28 @@ const BingoGame = () => {
     const isMatched = (index) => matchedCells.has(index);
 
     const checkBingo = () => {
-        const matched = [...matchedCells];
         const size = 5;
 
-        const isLineComplete = (indices) => indices.every(i => matched.includes(i));
+        const isLineComplete = (indices) => indices.every(i => matchedCells.has(i));
 
         const lines = [];
 
         for (let i = 0; i < size; i++) {
-            lines.push(Array.from({ length: size }, (_, j) => i * size + j));
-            lines.push(Array.from({ length: size }, (_, j) => j * size + i));
+            lines.push(Array.from({ length: size }, (_, j) => i * size + j)); // Rows
+            lines.push(Array.from({ length: size }, (_, j) => j * size + i)); // Columns
         }
 
+        // Diagonals
         lines.push([0, 6, 12, 18, 24]);
         lines.push([4, 8, 12, 16, 20]);
 
         const completed = lines.filter(isLineComplete);
 
         if (completed.length > 0) {
-            toast.success("Congratulations! Bingo is completed!", { position: "top-center" });
+            toast.success("🎉 Congratulations! Bingo is completed!", { position: "top-center" });
             socket.emit("bingoSuccess");
         } else {
-            toast.error("Still Bingo is not complete", { position: "top-center" });
+            toast.error("❌ Still Bingo is not complete", { position: "top-center" });
         }
     };
 
