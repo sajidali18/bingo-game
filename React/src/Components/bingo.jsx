@@ -119,10 +119,10 @@ const BingoGame = () => {
         const completed = lines.filter(isLineComplete);
 
         if (completed.length > 0) {
-            toast.success("🎉 Congratulations! Bingo is completed!", { position: "top-center" });
+            toast.success(" Congratulations Bingo is completed!", { position: "top-center" });
             socket.emit("bingoSuccess");
         } else {
-            toast.error("❌ Still Bingo is not complete", { position: "top-center" });
+            toast.error("Still Bingo is not complete", { position: "top-center" });
         }
     };
 
